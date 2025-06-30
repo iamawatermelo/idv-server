@@ -1,0 +1,17 @@
+[project]
+name = "idv-server"
+dynamic = ["version"]
+description = "IDV server"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+idv-server = "idv_server.__main__:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "./idv_server/__about__.py"
