@@ -22,7 +22,7 @@ class Config(BaseSettings):
     def _logging_config(self) -> dict[str, Any]:
         return self.logging_config or {
             "version": 1,
-            "disable_existing_loggers": True,
+            "disable_existing_loggers": False,
             "handlers": {
                 "rich_console": {
                     "class": "rich.logging.RichHandler",
@@ -34,7 +34,7 @@ class Config(BaseSettings):
                 },
                 "rich_third_party": {
                     "class": "rich.logging.RichHandler",
-                    "level": "WARNING",
+                    "level": "DEBUG",
                     
                     "rich_tracebacks": True,
                     "show_path": False,
@@ -43,18 +43,18 @@ class Config(BaseSettings):
             },
             "loggers": {
                 "idv_server": {
-                    "level": self.log_level,
                     "handlers": ["rich_console"],
+                    "level": self.log_level,
                     "propagate": False
                 },
                 "hypercorn": {
                     "handlers": ["rich_third_party"],
-                    "level": "WARNING",
+                    "level": "INFO",
                     "propagate": False,
                 },
             },
             "root": {
-                "level": "WARNING",
+                "level": "DEBUG",
                 "handlers": ["rich_third_party"]
             }
         }
