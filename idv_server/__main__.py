@@ -1,11 +1,14 @@
 import asyncio
 import logging
 import logging.config
+from sqlmodel import SQLModel
 import typer
 import hypercorn
 from hypercorn.asyncio import serve
 from idv_server.config import config
 from idv_server.asgi import app as asgi_app
+from idv_server.engine import connect
+from rich import print
 
 logger = logging.getLogger("idv_server.__main__")
 
@@ -29,3 +32,26 @@ def run_server():
         )
 
         return 1
+
+
+@app.command("init-db")
+def init_db():
+    async def _init_db():
+        engine = await connect()
+        
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.drop_all, checkfirst=False)
+            await conn.run_sync(SQLModel.metadata.create_all)
+        
+        await engine.dispose(close=True)
+    
+    print("[yellow]Are you sure you want to init-db?[/yellow]")
+    print(f"[red]This will delete all of your data on {config.postgres_connection_string}![/red]")
+    print("Type [blue]y[/blue] to continue:")
+    
+    if input("[y/N]: ").strip() == "y":
+        print("\n[yellow]Initialising database...[/yellow]")
+        asyncio.run(_init_db())
+    else:
+        print("\nCancelled.")
+        

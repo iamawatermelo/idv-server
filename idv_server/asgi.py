@@ -6,6 +6,7 @@ from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio.engine import create_async_engine
 from sqlmodel import SQLModel
 from idv_server.config import config
+from idv_server.engine import connect
 from idv_server.schema import graphql
 from time import time
 
@@ -14,10 +15,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
-    connection_string = make_url(config.postgres_connection_string.encoded_string())
-    connection_string = connection_string.set(drivername="postgresql+asyncpg")
+    engine = connect()
     
-    engine = create_async_engine(connection_string)
+    async with engine.begin() as conn:
+        # Test the database connection
+        await conn.execute("SELECT 'hello, world!'")
     
     yield
     
