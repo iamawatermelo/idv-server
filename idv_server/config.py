@@ -26,36 +26,31 @@ class Config(BaseSettings):
             "handlers": {
                 "rich_console": {
                     "class": "rich.logging.RichHandler",
-                    "level": "DEBUG",
+                    "level": self.log_level,
                     
                     "rich_tracebacks": True,
-                    "show_path": False,
-                    "markup": True
-                },
-                "rich_third_party": {
-                    "class": "rich.logging.RichHandler",
-                    "level": "DEBUG",
-                    
-                    "rich_tracebacks": True,
-                    "show_path": False,
-                    "markup": False
+                    "show_path": True,
+                    "markup": True,
+                    "tracebacks_suppress": [
+                        "strawberry",
+                        "hypercorn",
+                        "sqlalchemy",
+                        "sqlmodel",
+                        "anyio",
+                        "click"
+                    ]
                 }
             },
             "loggers": {
-                "idv_server": {
-                    "handlers": ["rich_console"],
-                    "level": self.log_level,
-                    "propagate": False
-                },
                 "hypercorn": {
-                    "handlers": ["rich_third_party"],
                     "level": "INFO",
                     "propagate": False,
+                    "handlers": ["rich_console"]
                 },
             },
             "root": {
                 "level": "DEBUG",
-                "handlers": ["rich_third_party"]
+                "handlers": ["rich_console"]
             }
         }
 

@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
-    logging.debug("Shutting down...")
-    
     connection_string = make_url(config.postgres_connection_string.encoded_string())
     connection_string = connection_string.set(drivername="postgresql+asyncpg")
     
