@@ -30,8 +30,7 @@ class OwnershipType(enum.Enum):
 
 @strawberry.enum
 class TicketVerificationVerdict(enum.Enum):
-    NOT_FINISHED = "NOT_FINISHED"
-    ABANDONED = "ABANDONED"
+    EXPIRED = "EXPIRED"
 
     # Rejected temporarily means the user should be able to resubmit.
     REJECTED_TEMPORARILY = "REJECTED_TEMPORARILY"

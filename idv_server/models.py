@@ -30,6 +30,48 @@ class Application(SQLModel, table=True):
     tickets: list[Ticket] = Relationship(back_populates="issuer")
 
 
+class BasicInformation(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    
+    first_name: str
+    last_name: str
+    date_of_birth: date
+    country_of_primary_residence: str
+    
+    ticket_id: int = Field(foreign_key="ticket.id", unique=True)
+    ticket: Ticket = Relationship(back_populates="basic_information")
+
+
+class VerificationInformation(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    
+    verifier: str
+    verdict: TicketVerificationVerdict
+    verdict_reason: str
+    verdict_human_reason: str | None
+    
+    authenticity: AuthenticityType | None 
+    ownership: OwnershipType | None
+    first_name: str | None
+    last_name: str | None
+    date_of_birth: date | None
+    
+    ticket_id: int = Field(foreign_key="ticket.id", unique=True)
+    ticket: Ticket = Relationship(back_populates="verification_information")
+
+
+class Metadata(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    
+    timestamp: datetime
+    source: str
+    message: str
+    details: dict[str, Any] = Field(sa_column=Column(JSONB))
+    
+    ticket_id: int = Field(foreign_key="ticket.id")
+    ticket: Ticket = Relationship(back_populates="metadata")
+
+
 class Ticket(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     ticket_id: UUID = Field(default=uuid4)
@@ -46,18 +88,8 @@ class Ticket(SQLModel, table=True):
     user_verdict: str | None
     user_verdict_type: UserVerdictType | None
     
-    user_first_name: str | None
-    user_last_name: str | None
-    user_date_of_birth: date
-    user_country_of_primary_residence: str
+    basic_information: BasicInformation | None = Relationship(back_populates="ticket")
     
-    authentication_token: str | None
-    
-    verifier: str | None
-    verdict: TicketVerificationVerdict
-    verdict_reason: str | None
-    verdict_human_reason: str | None
-    verified_first_name: str | None
-    verified_last_name: str | None
-    verified_date_of_birth: str | None
-    metadata: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSONB))
+    verification_information: VerificationInformation | None = Relationship(back_populates="ticket")
+
+    metadata: list[Metadata] = Relationship(back_populates="ticket")
