@@ -1,11 +1,18 @@
 from datetime import date, datetime
-import enum
 from typing import Annotated, Any
 import strawberry
 import strawberry.asgi
 from uuid import UUID
 from strawberry.field_extensions import InputMutationExtension
 from strawberry.scalars import JSON
+
+from idv_server.enums import (
+    AuthenticityType,
+    OwnershipType,
+    TicketVerificationVerdict,
+    TicketStage,
+    UserVerdictType,
+)
 
 
 @strawberry.type
@@ -23,33 +30,7 @@ class MetadataEntry:
     timestamp: datetime
     source: str
     message: str
-    details: Annotated[dict[str, Any], JSON]
-
-
-@strawberry.enum
-class AuthenticityType(enum.Enum):
-    # The document has been cross-checked by a government's signature
-    # or a government database.
-    STRONG = "STRONG"
-
-    # The document was visually inspected.
-    MANUAL = "MANUAL"
-
-    # The document was not verified at all.
-    NOT_VERIFIED = "NOT_VERIFIED"
-
-
-@strawberry.enum
-class OwnershipType(enum.Enum):
-    # Liveness checking and facial recognition was used to ensure the
-    # document belongs to them.
-    STRONG = "STRONG"
-
-    # The document was manually matched to a user's face.
-    MANUAL = "MANUAL"
-
-    # The document was not verified.
-    NOT_VERIFIED = "NOT_VERIFIED"
+    details: JSON
 
 
 @strawberry.type
@@ -60,21 +41,6 @@ class UserData:
     first_name: str
     last_name: str
     date_of_birth: date
-
-
-@strawberry.enum
-class TicketVerificationVerdict(enum.Enum):
-    NOT_FINISHED = "NOT_FINISHED"
-    ABANDONED = "ABANDONED"
-
-    # Rejected temporarily means the user should be able to resubmit.
-    REJECTED_TEMPORARILY = "REJECTED_TEMPORARILY"
-
-    # Rejected permanently means that the user should be flagged for
-    # fraudulent behaviour.
-    REJECTED_PERMANENTLY = "REJECTED_PERMANENTLY"
-
-    ACCEPTED = "ACCEPTED"
 
 
 @strawberry.type
@@ -88,22 +54,6 @@ class TicketVerificationInformation:
     user_data: UserData | None
 
     metadata: list[MetadataEntry]
-
-
-@strawberry.enum
-class TicketStage(enum.Enum):
-    NOT_CLAIMED = "NOT_CLAIMED"
-    AUTH_ISSUED = "AUTH_ISSUED"
-    BASIC_INFORMATION_SUBMITTED = "BASIC_INFORMATION_SUBMITTED"
-    VERIFICATION_STARTED = "VERIFICATION_STARTED"
-    VERIFICATION_FINISHED = "VERIFICATION_FINISHED"
-
-
-@strawberry.enum
-class UserVerdictType:
-    ACCEPTED = "ACCEPTED"
-    REJECTED = "REJECTED"
-    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
 
 
 @strawberry.type
@@ -135,7 +85,7 @@ class Ticket:
 @strawberry.type
 class StartBasicVerificationResult:
     authentication_token: str
-    
+
     ticket: Ticket
 
 
@@ -144,7 +94,7 @@ class StartVerificationResult:
     verification_url: str
     verification_ticket: str
     verification_authentication_token: str
-    
+
     ticket: Ticket
 
 
@@ -168,7 +118,7 @@ class MetadataEntryInput:
     timestamp: datetime
     source: str
     message: str
-    details: Annotated[dict[str, Any], JSON]
+    details: JSON
 
 
 @strawberry.input
@@ -183,12 +133,14 @@ class UserDataInput:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(extensions=[InputMutationExtension()])
+    @strawberry.mutation()
     def create_ticket(self) -> Ticket:
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
-    def start_basic_verification(self, ticket: strawberry.ID) -> StartBasicVerificationResult:
+    def start_basic_verification(
+        self, ticket: strawberry.ID
+    ) -> StartBasicVerificationResult:
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
@@ -208,7 +160,7 @@ class Mutation:
         self,
         verification_ticket: strawberry.ID,
         message: str,
-        metadata: list[MetadataEntryInput]
+        metadata: list[MetadataEntryInput],
     ) -> Ticket:
         pass
 
@@ -221,6 +173,7 @@ class Mutation:
         user_data: UserDataInput,
     ) -> Ticket:
         pass
+
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
 
