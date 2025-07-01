@@ -1,16 +1,17 @@
 from typing import Any
-from pydantic import PostgresDsn, computed_field
+from pydantic import Field, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
 
 
 class Config(BaseSettings):
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",
+        env_prefix="IDV_",
         toml_file="config.toml"
     )
     
     hostname: str = "0.0.0.0"
-    port: int = 8080
+    port: int = Field(default=8080, alias="PORT")
     
     postgres_connection_string: PostgresDsn
     log_level: str = "WARNING"

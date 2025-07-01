@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
     st = time()
-    logging.debug("Starting up...")
+    logger.debug("Starting up...")
     
     connection_string = config.postgres_connection_string
     connection_string.scheme = "postgres+asyncpg"
     
     engine = create_async_engine(connection_string.encoded_string())
     
-    logging.debug(f"Started in {time() - st:.02}s")
+    logger.debug(f"Started in {time() - st:.02}s")
     
     yield
     
