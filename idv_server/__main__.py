@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import logging.config
+import asyncpg
 from sqlmodel import SQLModel
 import typer
 import hypercorn
@@ -9,6 +10,7 @@ from idv_server.config import config
 from idv_server.asgi import app as asgi_app
 from idv_server.engine import connect
 from rich import print
+from asyncpg.exceptions import InvalidCatalogNameError
 
 logger = logging.getLogger("idv_server.__main__")
 
@@ -39,11 +41,14 @@ def init_db():
     async def _init_db():
         engine = await connect()
         
-        async with engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.drop_all, checkfirst=False)
-            await conn.run_sync(SQLModel.metadata.create_all)
-        
-        await engine.dispose(close=True)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(SQLModel.metadata.drop_all, checkfirst=False)
+                await conn.run_sync(SQLModel.metadata.create_all)
+            
+            await engine.dispose(close=True)
+        except InvalidCatalogNameError:
+            print("[red]The database used in the connection string doesn't exist. Please create it.[/red]")
     
     print("[yellow]Are you sure you want to init-db?[/yellow]")
     print(f"[red]This will delete all of your data on {config.postgres_connection_string}![/red]")
