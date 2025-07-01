@@ -30,7 +30,7 @@ class MetadataEntry:
     timestamp: datetime
     source: str
     message: str
-    details: Annotated[dict[str, Any], JSON]
+    details: JSON
 
 
 @strawberry.type
@@ -118,7 +118,7 @@ class MetadataEntryInput:
     timestamp: datetime
     source: str
     message: str
-    details: Annotated[dict[str, Any], JSON]
+    details: JSON
 
 
 @strawberry.input
@@ -133,7 +133,7 @@ class UserDataInput:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(extensions=[InputMutationExtension()])
+    @strawberry.mutation()
     def create_ticket(self) -> Ticket:
         pass
 

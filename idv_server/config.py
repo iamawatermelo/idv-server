@@ -1,6 +1,5 @@
-from logging.config import _LoggerConfiguration
 from typing import Any
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -9,37 +8,55 @@ class Config(BaseSettings):
         env_nested_delimiter="__",
         toml_file="config.toml"
     )
-
+    
+    hostname: str = "0.0.0.0"
+    port: int = 8080
+    
     postgres_connection_string: PostgresDsn
-    logging_config: dict[str, Any] = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "handlers": {
-            "rich_console": {
-                "class": "rich.logging.RichHandler",
-                "level": "DEBUG",
-                
-                "rich_tracebacks": True,
-                "show_path": False,
-                "markup": True
+    log_level: str = "WARNING"
+    logging_config: dict[str, Any] | None = None
+    
+    @computed_field
+    @property
+    def _logging_config(self) -> dict[str, Any]:
+        return self.logging_config or {
+            "version": 1,
+            "disable_existing_loggers": True,
+            "handlers": {
+                "rich_console": {
+                    "class": "rich.logging.RichHandler",
+                    "level": "DEBUG",
+                    
+                    "rich_tracebacks": True,
+                    "show_path": False,
+                    "markup": True
+                },
+                "rich_third_party": {
+                    "class": "rich.logging.RichHandler",
+                    "level": "WARNING",
+                    
+                    "rich_tracebacks": True,
+                    "show_path": False,
+                    "markup": False
+                }
             },
-            "rich_third_party": {
-                "class": "rich.logging.RichHandler",
+            "loggers": {
+                "idv_server": {
+                    "level": self.log_level,
+                    "handlers": ["rich_console"],
+                    "propagate": False
+                },
+                "hypercorn": {
+                    "handlers": ["rich_third_party"],
+                    "level": "WARNING",
+                    "propagate": False,
+                },
+            },
+            "root": {
                 "level": "WARNING",
-                
-                "rich_tracebacks": True,
-                "show_path": False,
-                "markup": False
-            }
-        },
-        "loggers": {
-            "idv_server": {
-                "level": "DEBUG",
-                "handlers": ["rich_console"],
-                "propagate": False
+                "handlers": ["rich_third_party"]
             }
         }
-    }
 
     @classmethod
     def settings_customise_sources(
