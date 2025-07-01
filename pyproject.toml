@@ -4,7 +4,11 @@ dynamic = ["version"]
 description = "IDV server"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "hypercorn>=0.17.3",
+    "strawberry-graphql[asgi]>=0.275.5",
+    "typer>=0.16.0",
+]
 
 [project.scripts]
 idv-server = "idv_server.__main__:app"
