@@ -146,15 +146,9 @@ class Mutation:
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def submit_basic_information(
         self, ticket: strawberry.ID, basic_information: BasicInformation
-    ) -> Ticket:
-        pass
-
-    @strawberry.mutation(extensions=[InputMutationExtension()])
-    def begin_verification(
-        self, ticket: strawberry.ID, verification_type: str
     ) -> StartVerificationResult:
         pass
-
+    
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def update_verification_ticket(
         self,

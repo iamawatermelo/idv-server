@@ -17,6 +17,9 @@ class Config(BaseSettings):
     log_level: str = "WARNING"
     logging_config: dict[str, Any] | None = None
     
+    auth_headers = ["authorization"]
+    auth_pdp_endpoint = "http://localhost:3333/decisions"
+    
     @computed_field
     @property
     def _logging_config(self) -> dict[str, Any]:
