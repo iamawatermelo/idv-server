@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NewType, TypeAlias
 from starlette.requests import Request
 import strawberry
 import strawberry.asgi
@@ -7,6 +7,7 @@ from uuid import UUID
 from strawberry.field_extensions import InputMutationExtension
 from strawberry.scalars import JSON
 
+from idv_server.config import config
 from idv_server.auth import Unauthorized, authorize
 from idv_server.enums import (
     AuthenticityType,
@@ -16,40 +17,29 @@ from idv_server.enums import (
     UserVerdictType,
 )
 
+ID = strawberry.scalar(
+    NewType("ID", UUID),
+    serialize=lambda u: str(u),
+    parse_value=lambda u: UUID(hex=u),
+)
 
-class Permission(strawberry.BasePermission):
-    message = "Not allowed"
-    action: Literal["READ"] | Literal["MODIFY"]
-    resource: str
-    
-    def __init__(
-        self,
-        action: Literal["READ"] | Literal["MODIFY"],
-        resource: str
-    ):
-        self.action = action
-        self.resource = resource
-        
+if TYPE_CHECKING:
+    ID: TypeAlias = UUID
 
-    def has_permission(
-        self,
-        source: Any,
-        info: strawberry.Info,
-        **kwargs
-    ) -> bool:
-        request: Request = info.context["request"]
+
+def headers(info: strawberry.Info):
+    """
+    Extract authentication headers from a strawberry.Info object
+    """
     
-        try:
-            await authorize(
-                self.action,
-                self.resource.format_map(
-                    info
-                )
-            )
-        except Unauthorized:
-            return False
-        
-        return True
+    if config.auth is None:
+        return {}
+    
+    return {
+        k: v
+        for k, v in info.context["request"].headers.items()
+        if k in config.auth.forwarded_headers
+    }
 
 
 @strawberry.type
@@ -138,8 +128,21 @@ class StartVerificationResult:
 @strawberry.type
 class Query:
     @strawberry.field
-    def ticket(self, id: strawberry.ID) -> Ticket:
+    async def ticket(self, info: strawberry.Info, id: ID) -> Ticket:
+        await authorize(
+            "READ",
+            f"/ticket/{id}/",
+            headers=headers(info),
+            authorized_subject=None
+        )
+        
         pass
+
+
+@strawberry.input
+class TicketOptionsInput:
+    acceptable_authenticity: list[AuthenticityType]
+    acceptable_ownership: list[OwnershipType]
 
 
 @strawberry.input
@@ -171,25 +174,37 @@ class UserDataInput:
 @strawberry.type
 class Mutation:
     @strawberry.mutation()
-    def create_ticket(self) -> Ticket:
+    async def create_ticket(
+        self,
+        info: strawberry.Info,
+        issuer: ID | None,
+        ticket_options: TicketOptionsInput
+    ) -> Ticket:
+        await authorize(
+            "READ",
+            f"/issuers/{issuer}/createTicket",
+            headers=headers(info),
+            authorized_subject=issuer
+        )
+        
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def start_basic_verification(
-        self, ticket: strawberry.ID
+        self, ticket: ID
     ) -> StartBasicVerificationResult:
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def submit_basic_information(
-        self, ticket: strawberry.ID, basic_information: BasicInformation
+        self, ticket: ID, basic_information: BasicInformation
     ) -> StartVerificationResult:
         pass
     
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def update_verification_ticket(
         self,
-        verification_ticket: strawberry.ID,
+        verification_ticket: ID,
         message: str,
         metadata: list[MetadataEntryInput],
     ) -> Ticket:
@@ -198,7 +213,7 @@ class Mutation:
     @strawberry.mutation(extensions=[InputMutationExtension()])
     def finalise_verification_ticket(
         self,
-        verification_ticket: strawberry.ID,
+        verification_ticket: ID,
         verdict: TicketVerificationVerdict,
         metadata: list[MetadataEntryInput],
         user_data: UserDataInput,
