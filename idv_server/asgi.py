@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
-    engine = connect()
+    engine = await connect()
     
     async with engine.begin() as conn:
         # Test the database connection
-        await conn.execute("SELECT 'hello, world!'")
+        await conn.exec_driver_sql("SELECT 'hello, world!'")
     
     yield
     

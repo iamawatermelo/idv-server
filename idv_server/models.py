@@ -92,4 +92,4 @@ class Ticket(SQLModel, table=True):
     
     verification_information: VerificationInformation | None = Relationship(back_populates="ticket")
 
-    metadata: list[Metadata] = Relationship(back_populates="ticket")
+    metadata_entries: list[Metadata] = Relationship(back_populates="ticket")
