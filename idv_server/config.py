@@ -1,6 +1,13 @@
 from typing import Any
-from pydantic import Field, PostgresDsn, computed_field
+from pydantic import BaseModel, Field, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
+
+
+class Auth(BaseModel):
+    pdp_endpoint: str
+    forwarded_headers: list[str] = ["authorization"]
+    subject_header: str = "x-authenticated-subject"
+    root_subjects: list[str] = [""]
 
 
 class Config(BaseSettings):
@@ -17,8 +24,7 @@ class Config(BaseSettings):
     log_level: str = "WARNING"
     logging_config: dict[str, Any] | None = None
     
-    auth_headers = ["authorization"]
-    auth_pdp_endpoint = "http://localhost:3333/decisions"
+    auth: Auth | None = None
     
     @computed_field
     @property

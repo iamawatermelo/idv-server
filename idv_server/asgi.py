@@ -15,11 +15,21 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
+    if config.auth is None:
+        logger.error(
+            "[red]Authentication is not configured![/red]"
+            "\nThis "
+        )
+    
+    st = time()
+    
     engine = await connect()
     
     async with engine.begin() as conn:
         # Test the database connection
         await conn.exec_driver_sql("SELECT 'hello, world!'")
+        
+    logger.info(f"Started up in {time() - st:.02}s.")
     
     yield
     
