@@ -1,11 +1,13 @@
 from datetime import date, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
+from starlette.requests import Request
 import strawberry
 import strawberry.asgi
 from uuid import UUID
 from strawberry.field_extensions import InputMutationExtension
 from strawberry.scalars import JSON
 
+from idv_server.auth import Unauthorized, authorize
 from idv_server.enums import (
     AuthenticityType,
     OwnershipType,
@@ -13,6 +15,41 @@ from idv_server.enums import (
     TicketStage,
     UserVerdictType,
 )
+
+
+class Permission(strawberry.BasePermission):
+    message = "Not allowed"
+    action: Literal["READ"] | Literal["MODIFY"]
+    resource: str
+    
+    def __init__(
+        self,
+        action: Literal["READ"] | Literal["MODIFY"],
+        resource: str
+    ):
+        self.action = action
+        self.resource = resource
+        
+
+    def has_permission(
+        self,
+        source: Any,
+        info: strawberry.Info,
+        **kwargs
+    ) -> bool:
+        request: Request = info.context["request"]
+    
+        try:
+            await authorize(
+                self.action,
+                self.resource.format_map(
+                    info
+                )
+            )
+        except Unauthorized:
+            return False
+        
+        return True
 
 
 @strawberry.type
