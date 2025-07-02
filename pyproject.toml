@@ -5,6 +5,7 @@ description = "IDV server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.12.13",
     "alembic>=1.16.2",
     "asyncpg>=0.30.0",
     "fastapi>=0.115.14",
