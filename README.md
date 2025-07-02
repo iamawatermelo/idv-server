@@ -89,7 +89,7 @@ reject otherwise.
 > idv-server will include an `X-Issuer-Id` header, which includes the
 > issuer of the ticket.
 
-- `ticket(id: $id)` -> `GET /ticket/$id/`
+- `ticket(id: $id)` -> `GET /ticket/$id`
   **Note:** Should be public.
 
 - `ticket(id: $id) { verificationInformation }` -> `GET /ticket/$id/verificationInformation`
@@ -97,7 +97,7 @@ reject otherwise.
 
 #### Mutations
 
-- `createTicket(issuer: $id)` -> `POST /issuers/$id/createTicket`
+- `createTicket(issuer: $id)` -> `POST /issuer/$id/createTicket`
   **Note:** Should only be available to issuers.
   
 > [!NOTE]

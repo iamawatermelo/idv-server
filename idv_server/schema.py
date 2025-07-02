@@ -106,7 +106,19 @@ class Ticket:
     verification_options: list[str] | None
 
     # Only available to the issuer, not the user
-    verification_information: TicketVerificationInformation
+    @strawberry.field
+    async def verification_information(
+        self,
+        info: strawberry.Info
+    ) -> TicketVerificationInformation:
+        await authorize(
+            "READ",
+            f"/ticket/{id}/verificationInformation",
+            headers=headers(info),
+            authorized_subject=None
+        )
+        
+        pass
 
 
 @strawberry.type
@@ -131,7 +143,7 @@ class Query:
     async def ticket(self, info: strawberry.Info, id: ID) -> Ticket:
         await authorize(
             "READ",
-            f"/ticket/{id}/",
+            f"/ticket/{id}",
             headers=headers(info),
             authorized_subject=None
         )
@@ -173,51 +185,86 @@ class UserDataInput:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation()
+    @strawberry.mutation(extensions=[InputMutationExtension()])
     async def create_ticket(
         self,
         info: strawberry.Info,
-        issuer: ID | None,
+        issuer: ID,
         ticket_options: TicketOptionsInput
     ) -> Ticket:
         await authorize(
-            "READ",
-            f"/issuers/{issuer}/createTicket",
+            "MODIFY",
+            f"/issuer/{issuer}/createTicket",
             headers=headers(info),
-            authorized_subject=issuer
+            authorized_subject=str(issuer) if issuer else None
+        )
+
+        pass
+
+    @strawberry.mutation(extensions=[InputMutationExtension()])
+    async def start_basic_verification(
+        self,
+        info: strawberry.Info,
+        ticket: ID
+    ) -> StartBasicVerificationResult:
+        await authorize(
+            "MODIFY",
+            f"/ticket/{ticket}/startBasicVerification",
+            headers=headers(info),
+            authorized_subject=None
         )
         
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
-    def start_basic_verification(
-        self, ticket: ID
-    ) -> StartBasicVerificationResult:
+    async def submit_basic_information(
+        self,
+        info: strawberry.Info,
+        ticket: ID,
+        basic_information: BasicInformation
+    ) -> StartVerificationResult:
+        await authorize(
+            "MODIFY",
+            f"/ticket/{ticket}/submitBasicInformation",
+            headers=headers(info),
+            authorized_subject=None
+        )
+        
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
-    def submit_basic_information(
-        self, ticket: ID, basic_information: BasicInformation
-    ) -> StartVerificationResult:
-        pass
-    
-    @strawberry.mutation(extensions=[InputMutationExtension()])
-    def update_verification_ticket(
+    async def update_verification_ticket(
         self,
+        info: strawberry.Info,
         verification_ticket: ID,
         message: str,
         metadata: list[MetadataEntryInput],
     ) -> Ticket:
+        await authorize(
+            "MODIFY",
+            f"/verificationTicket/{verification_ticket}/updateVerificationTicket",
+            headers=headers(info),
+            authorized_subject=None # TODO
+        )
+        
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
-    def finalise_verification_ticket(
+    async def finalise_verification_ticket(
         self,
+        info: strawberry.Info,
         verification_ticket: ID,
         verdict: TicketVerificationVerdict,
         metadata: list[MetadataEntryInput],
         user_data: UserDataInput,
     ) -> Ticket:
+        await authorize(
+            "MODIFY",
+            f"/verificationTicket/{verification_ticket}/finalizeVerificationTicket",
+            headers=headers(info),
+            authorized_subject=None # TODO
+        )
+        
         pass
 
 
