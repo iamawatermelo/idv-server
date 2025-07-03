@@ -85,6 +85,8 @@ class TicketVerificationInformation:
 
 @strawberry.type
 class Ticket:
+    id: ID
+    
     issuer_id: strawberry.Private[UUID]
     issuer: Application
 
