@@ -4,17 +4,20 @@ Authentication for idv-server.
 
 import logging
 from typing import Literal
-import aiohttp
-from alembic.op import f
-from attr import dataclass
+from graphql import GraphQLError
 
 from idv_server.config import config
 from idv_server.env import Env
 
 logger = logging.getLogger(__name__)
 
-class Unauthorized(Exception):
-    pass
+
+class Unauthorized(GraphQLError):
+    def __init__(
+        self,
+        message="Subject isn't allowed to perform this action"
+    ):
+        super().__init__(message=message)
 
 
 async def authorize(
@@ -31,7 +34,8 @@ async def authorize(
     
     async with env.http.request(
         "GET" if method == "READ" else "POST",
-        f"{config.auth.pdp_endpoint}{resource}"
+        f"{config.auth.pdp_endpoint}{resource}",
+        headers=headers
     ) as req:
         if req.status not in {200, 204}:
             logger.debug(f"rejected {method} access on {resource} with authorized subjects {authorized_subject} because of PDP decision")

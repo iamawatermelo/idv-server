@@ -81,13 +81,17 @@ Authorization: eyXXXXXX
 idv-server will accept the request if a 200 or 204 is returned, and
 reject otherwise.
 
+idv-server will accept an `X-Authenticated-Subject` header by default,
+but you can also change the header that contains the authenticated
+subject with `subject_header` under `[auth]`. Unauthenticated responses
+should not contain an `X-Authenticated-Subject` header.
+
+The `X-Authenticated-Subject` header should match the issuer ID or
+verifier ID.
+
 ### Routes
 
 #### Queries
-
-> [!NOTE]
-> idv-server will include an `X-Issuer-Id` header, which includes the
-> issuer of the ticket.
 
 - `ticket(id: $id)` -> `GET /ticket/$id`
   **Note:** Should be public.
@@ -100,9 +104,6 @@ reject otherwise.
 - `createTicket(issuer: $id)` -> `POST /issuer/$id/createTicket`
   **Note:** Should only be available to issuers.
   
-> [!NOTE]
-> idv-server will include an `X-Issuer-Id` header.
-  
 - `startBasicVerification(ticket: $id)` -> `POST /ticket/$id/startBasicVerification`
   **Note:** Should be public. idv-server will also verify the
   Authorization header to ensure that it matches the token associated
@@ -112,9 +113,6 @@ reject otherwise.
   **Note:** Should be public. idv-server will also verify the
   Authorization header to ensure that it matches the token associated
   with the ticket.
-
-> [!NOTE]
-> idv-server will include an `X-Verifier-Id` header.
 
 - `updateVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/updateVerificationTicket`
   **Note:** Should only be available to the verifier that the ticket
