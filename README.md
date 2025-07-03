@@ -93,31 +93,31 @@ verifier ID.
 
 #### Queries
 
-- `ticket(id: $id)` -> `GET /ticket/$id`
+- `ticket(id: $id)` -> `GET /ticket/$id`  
   **Note:** Should be public.
 
-- `ticket(id: $id) { verificationInformation }` -> `GET /ticket/$id/verificationInformation`
+- `ticket(id: $id) { verificationInformation }` -> `GET /ticket/$id/verificationInformation`  
   **Note:** Should only be available to the issuer.
 
 #### Mutations
 
-- `createTicket(issuer: $id)` -> `POST /issuer/$id/createTicket`
+- `createTicket(issuer: $id)` -> `POST /issuer/$id/createTicket`  
   **Note:** Should only be available to issuers.
   
-- `startBasicVerification(ticket: $id)` -> `POST /ticket/$id/startBasicVerification`
+- `startBasicVerification(ticket: $id)` -> `POST /ticket/$id/startBasicVerification`  
   **Note:** Should be public. idv-server will also verify the
   Authorization header to ensure that it matches the token associated
   with the ticket.
 
-- `submitBasicInformation(ticket: $id)` -> `POST /ticket/$id/submitBasicInformation`
+- `submitBasicInformation(ticket: $id)` -> `POST /ticket/$id/submitBasicInformation`  
   **Note:** Should be public. idv-server will also verify the
   Authorization header to ensure that it matches the token associated
   with the ticket.
 
-- `updateVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/updateVerificationTicket`
+- `updateVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/updateVerificationTicket`  
   **Note:** Should only be available to the verifier that the ticket
   was issued to.
 
-- `finalizeVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/finalizeVerificationTicket`
+- `finalizeVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/finalizeVerificationTicket`  
   **Note:** Should only be available to the verifier that the ticket
   was issued to.
