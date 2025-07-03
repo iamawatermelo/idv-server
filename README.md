@@ -89,6 +89,10 @@ should not contain an `X-Authenticated-Subject` header.
 The `X-Authenticated-Subject` header should match the issuer ID or
 verifier ID.
 
+See [insecure_oathkeeper.json](insecure_oathkeeper.json) for an example
+Ory Oathkeeper config that allows all requests by using a root subject.
+Root subjects may be added in `root_subjects` under `[auth]`.
+
 ### Routes
 
 #### Queries
