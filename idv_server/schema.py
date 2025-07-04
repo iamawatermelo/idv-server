@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 import strawberry
 import strawberry.asgi
-from uuid import UUID
+from uuid import UUID, uuid4
 from strawberry.field_extensions import InputMutationExtension
 from strawberry.scalars import JSON
 
@@ -265,6 +265,7 @@ class Mutation:
 
         async with env.db.begin() as tx, AsyncSession(tx) as session:
             issuer = IssuerModel(
+                uuid=uuid4(),
                 name=name,
                 hct_root_tone=hct_root_tone,
                 bg_url=bg_url,
@@ -300,9 +301,9 @@ class Mutation:
 
         async with env.db.begin() as tx, AsyncSession(tx) as session:
             issuer_model = (await session.execute(
-                select(ApplicationModel)
-                .where(ApplicationModel.uuid == issuer)
-            )).scalars().one_or_none
+                select(IssuerModel)
+                .where(IssuerModel.uuid == issuer)
+            )).scalars().one_or_none()
 
             if not issuer_model:
                 raise ValueError("Issuer not found")
@@ -310,12 +311,12 @@ class Mutation:
             now = datetime.now()
 
             ticket = TicketModel(
-                issuer_id=issuer,
+                issuer_id=issuer_model.id,
                 issued_at=now,
                 claim_expires_at=now + timedelta(seconds=issuer_model.default_claim_expiration_time),
                 verification_expires_at=now + timedelta(seconds=issuer_model.default_verification_expiration_time),
                 ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time),
-                acceptable_authenticity=ticket_options.acceptable_authenticity,
+                acceptable_authenticity=[x.value for x in ticket_options.acceptable_authenticity],
                 acceptable_ownership=ticket_options.acceptable_ownership
             )
 

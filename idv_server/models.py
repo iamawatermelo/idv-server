@@ -1,4 +1,3 @@
-from __future__ import annotations
 from datetime import datetime, date
 from typing import Any
 from uuid import UUID, uuid4
@@ -28,12 +27,12 @@ class IssuerModel(SQLModel, table=True):
     bg_url: str | None
     icon_url: str | None
     favicon_url: str | None
-    
+
     default_claim_expiration_time: int = 3600
     default_verification_expiration_time: int = 86400
     default_ticket_expiration_time: int = 604800
 
-    tickets: list[TicketModel] = Relationship(back_populates="issuer")
+    tickets: list["TicketModel"] = Relationship(back_populates="issuer")
 
 
 class BasicInformationModel(SQLModel, table=True):
@@ -47,7 +46,7 @@ class BasicInformationModel(SQLModel, table=True):
     country_of_primary_residence: str
 
     ticket_id: int = Field(foreign_key="ticket.id", unique=True)
-    ticket: TicketModel = Relationship(back_populates="basic_information")
+    ticket: "TicketModel" = Relationship(back_populates="basic_information")
 
 
 class VerificationInformationModel(SQLModel, table=True):
@@ -67,7 +66,7 @@ class VerificationInformationModel(SQLModel, table=True):
     date_of_birth: date | None
 
     ticket_id: int = Field(foreign_key="ticket.id", unique=True)
-    ticket: TicketModel = Relationship(back_populates="verification_information")
+    ticket: "TicketModel" = Relationship(back_populates="verification_information")
 
 
 class MetadataModel(SQLModel, table=True):
@@ -81,14 +80,14 @@ class MetadataModel(SQLModel, table=True):
     details: dict[str, Any] = Field(sa_column=Column(JSONB))
 
     ticket_id: int = Field(foreign_key="ticket.id")
-    ticket: TicketModel = Relationship(back_populates="metadata")
+    ticket: "TicketModel" = Relationship(back_populates="metadata_entries")
 
 
 class TicketModel(SQLModel, table=True):
     __tablename__ = "ticket"
 
     id: int | None = Field(default=None, primary_key=True)
-    uuid: UUID = Field(default=uuid4)
+    uuid: UUID
 
     issuer_id: int = Field(foreign_key="issuer.id")
     issuer: IssuerModel = Relationship(back_populates="tickets")
@@ -101,7 +100,7 @@ class TicketModel(SQLModel, table=True):
     stage: TicketStage = TicketStage.NOT_CLAIMED
     user_verdict: str | None = None
     user_verdict_type: UserVerdictType | None = None
-    
+
     acceptable_authenticity: list[AuthenticityType] = Field(sa_column=Column(ARRAY(String)))
     acceptable_ownership: list[OwnershipType] = Field(sa_column=Column(ARRAY(String)))
 
