@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 import time
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NewType, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NewType, Self, TypeAlias
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
@@ -20,7 +20,7 @@ from idv_server.enums import (
     UserVerdictType,
 )
 from idv_server.env import Env
-from idv_server.models import ApplicationModel, TicketModel
+from idv_server.models import IssuerModel, TicketModel
 
 ID = strawberry.scalar(
     NewType("ID", UUID),
@@ -36,10 +36,10 @@ def headers(info: strawberry.Info):
     """
     Extract authentication headers from a strawberry.Info object
     """
-    
+
     if config.auth is None:
         return {}
-    
+
     return {
         k: v
         for k, v in info.context["request"].headers.items()
@@ -48,13 +48,36 @@ def headers(info: strawberry.Info):
 
 
 @strawberry.type
-class Application:
+class Issuer:
+    id: ID
     name: str
 
     hct_root_tone: int | None
     bg_url: str | None
     icon_url: str | None
     favicon_url: str | None
+
+    default_claim_expiration_time: int
+    default_verification_expiration_time: int
+    default_ticket_expiration_time: int
+
+    @classmethod
+    def from_orm(cls, issuer_model: IssuerModel) -> Self:
+        """
+        Convert an IssuerModel to an Issuer GraphQL type
+        """
+
+        return cls(
+            id=issuer_model.uuid,
+            name=issuer_model.name,
+            hct_root_tone=issuer_model.hct_root_tone,
+            bg_url=issuer_model.bg_url,
+            icon_url=issuer_model.icon_url,
+            favicon_url=issuer_model.favicon_url,
+            default_claim_expiration_time=issuer_model.default_claim_expiration_time,
+            default_verification_expiration_time=issuer_model.default_verification_expiration_time,
+            default_ticket_expiration_time=issuer_model.default_ticket_expiration_time,
+        )
 
 
 @strawberry.type
@@ -92,9 +115,9 @@ class TicketVerificationInformation:
 class Ticket:
     db_id: strawberry.Private[UUID]
     id: ID
-    
+
     issuer_id: strawberry.Private[UUID]
-    issuer: Application
+    issuer: Issuer
 
     issued_at: datetime
 
@@ -111,22 +134,45 @@ class Ticket:
     verdict: str | None
     verdict_type: UserVerdictType | None
 
-    verification_options: list[str] | None
-
     # Only available to the issuer, not the user
     @strawberry.field
     async def verification_information(
         self,
         info: strawberry.Info
     ) -> TicketVerificationInformation:
+        """
+        Fetch verification information from this ticket. Available to
+        issuers only.
+        """
+
         await authorize(
             "READ",
             f"/ticket/{id}/verificationInformation",
             headers=headers(info),
             authorized_subject=None
         )
-        
+
         pass
+
+    @classmethod
+    def from_orm(cls, ticket_model: TicketModel) -> Self:
+        """
+        Convert a TicketModel to a Ticket GraphQL type
+        """
+
+        return cls(
+            db_id=ticket_model.id,
+            id=ticket_model.uuid,
+            issuer_id=ticket_model.issuer_id,
+            issuer=Issuer.from_orm(ticket_model.issuer),
+            issued_at=ticket_model.issued_at,
+            claim_expires_at=ticket_model.claim_expires_at,
+            verification_expires_at=ticket_model.verification_expires_at,
+            ticket_expires_at=ticket_model.ticket_expires_at,
+            stage=ticket_model.stage,
+            verdict=ticket_model.user_verdict,
+            verdict_type=ticket_model.user_verdict_type
+        )
 
 
 @strawberry.type
@@ -155,7 +201,7 @@ class Query:
             headers=headers(info),
             authorized_subject=None
         )
-        
+
         pass
 
 
@@ -194,6 +240,49 @@ class UserDataInput:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(extensions=[InputMutationExtension()])
+    async def create_issuer(
+        self,
+        info: strawberry.Info,
+        name: str,
+
+        hct_root_tone: int | None = None,
+        bg_url: str | None = None,
+        icon_url: str | None = None,
+        favicon_url: str | None = None,
+
+        default_claim_expiration_time: int = 3600,
+        default_verification_expiration_time: int = 86400,
+        default_ticket_expiration_time: int = 604800
+    ) -> Issuer:
+        await authorize(
+            "MODIFY",
+            "/createIssuer",
+            headers=headers(info),
+            authorized_subject=None
+        )
+
+        env = Env.ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            issuer = IssuerModel(
+                name=name,
+                hct_root_tone=hct_root_tone,
+                bg_url=bg_url,
+                icon_url=icon_url,
+                favicon_url=favicon_url,
+                default_claim_expiration_time=default_claim_expiration_time,
+                default_verification_expiration_time=default_verification_expiration_time,
+                default_ticket_expiration_time=default_ticket_expiration_time,
+            )
+
+            session.add(issuer)
+            await session.commit()
+            await session.refresh(issuer)
+
+            return Issuer.from_orm(issuer)
+
+
+    @strawberry.mutation(extensions=[InputMutationExtension()])
     async def create_ticket(
         self,
         info: strawberry.Info,
@@ -206,36 +295,36 @@ class Mutation:
             headers=headers(info),
             authorized_subject=str(issuer) if issuer else None
         )
-        
+
         env = Env.ctx()
-        
+
         async with env.db.begin() as tx, AsyncSession(tx) as session:
             issuer_model = (await session.execute(
                 select(ApplicationModel)
                 .where(ApplicationModel.uuid == issuer)
             )).scalars().one_or_none
-            
+
             if not issuer_model:
                 raise ValueError("Issuer not found")
-        
+
             now = datetime.now()
-            
+
             ticket = TicketModel(
                 issuer_id=issuer,
                 issued_at=now,
                 claim_expires_at=now + timedelta(seconds=issuer_model.default_claim_expiration_time),
                 verification_expires_at=now + timedelta(seconds=issuer_model.default_verification_expiration_time),
-                ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time)
+                ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time),
+                acceptable_authenticity=ticket_options.acceptable_authenticity,
+                acceptable_ownership=ticket_options.acceptable_ownership
             )
-            
+
             session.add(ticket)
             await session.commit()
             await session.refresh(ticket)
-            
-            return Ticket(
-                
-            )
-        
+
+            return Ticket.from_orm(ticket)
+
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def start_basic_verification(
@@ -249,7 +338,7 @@ class Mutation:
             headers=headers(info),
             authorized_subject=None
         )
-        
+
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
@@ -265,7 +354,7 @@ class Mutation:
             headers=headers(info),
             authorized_subject=None
         )
-        
+
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
@@ -282,7 +371,7 @@ class Mutation:
             headers=headers(info),
             authorized_subject=None # TODO
         )
-        
+
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
@@ -300,7 +389,7 @@ class Mutation:
             headers=headers(info),
             authorized_subject=None # TODO
         )
-        
+
         pass
 
 

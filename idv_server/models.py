@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import ARRAY, Field, Relationship, SQLModel, String
 
 from idv_server.enums import (
     AuthenticityType,
@@ -16,8 +16,8 @@ from idv_server.enums import (
 )
 
 
-class ApplicationModel(SQLModel, table=True):
-    __tablename__ = "application"
+class IssuerModel(SQLModel, table=True):
+    __tablename__ = "issuer"
 
     id: int | None = Field(default=None, primary_key=True)
     uuid: UUID = Field(default=uuid4)
@@ -90,8 +90,8 @@ class TicketModel(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     uuid: UUID = Field(default=uuid4)
 
-    issuer_id: int = Field(foreign_key="application.id")
-    issuer: ApplicationModel = Relationship(back_populates="tickets")
+    issuer_id: int = Field(foreign_key="issuer.id")
+    issuer: IssuerModel = Relationship(back_populates="tickets")
 
     issued_at: datetime
     claim_expires_at: datetime
@@ -101,6 +101,9 @@ class TicketModel(SQLModel, table=True):
     stage: TicketStage = TicketStage.NOT_CLAIMED
     user_verdict: str | None = None
     user_verdict_type: UserVerdictType | None = None
+    
+    acceptable_authenticity: list[AuthenticityType] = Field(sa_column=Column(ARRAY(String)))
+    acceptable_ownership: list[OwnershipType] = Field(sa_column=Column(ARRAY(String)))
 
     basic_information: BasicInformationModel | None = Relationship(back_populates="ticket")
 
