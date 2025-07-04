@@ -1,0 +1,30 @@
+[
+  {
+    "id": "public-access-rule",
+    "match": {
+      "url": "<.*>",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    "authenticators": [
+      {
+        "handler": "anonymous"
+      }
+    ],
+    "authorizer": {
+      "handler": "allow"
+    },
+    "mutators": [
+      {
+        "handler": "header",
+        "config": {
+          "headers": {
+            "X-Authenticated-Subject": "root"
+          }
+        }
+      }
+    ]
+  }
+]

@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import logging.config
-import asyncpg
+import importlib.resources
 from sqlmodel import SQLModel
 import typer
 import hypercorn
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 from hypercorn.asyncio import serve
 from idv_server.config import config
 from idv_server.asgi import app as asgi_app
@@ -20,6 +22,8 @@ app = typer.Typer(
 
 @app.command("serve")
 def run_server():
+    logging.config.dictConfig(config._logging_config)
+    
     hypercorn_config = hypercorn.Config()
     hypercorn_config.bind = f"{config.hostname}:{config.port}"
     hypercorn_config.loglevel = config.log_level
@@ -43,15 +47,15 @@ def init_db():
         
         try:
             async with engine.begin() as conn:
-                await conn.run_sync(SQLModel.metadata.drop_all, checkfirst=False)
+                await conn.run_sync(SQLModel.metadata.drop_all)
                 await conn.run_sync(SQLModel.metadata.create_all)
             
             await engine.dispose(close=True)
         except InvalidCatalogNameError:
             print("[red]The database used in the connection string doesn't exist. Please create it.[/red]")
     
-    print("[yellow]Are you sure you want to init-db?[/yellow]")
-    print(f"[red]This will delete all of your data on {config.postgres_connection_string}![/red]")
+    print("[yellow]Are you sure you want to [bold]init-db[/bold]?[/yellow]")
+    print(f"[red]This will delete all of your data on [bold]{config.postgres_connection_string}[/bold]![/red]")
     print("Type [blue]y[/blue] to continue:")
     
     if input("[y/N]: ").strip() == "y":
@@ -60,3 +64,23 @@ def init_db():
     else:
         print("\nCancelled.")
         
+
+@app.command("migrate")
+def migrate():
+    print("[yellow]Are you sure you want to [bold]migrate[/bold]?[/yellow]")
+    print(f"[blue]This will affect [bold]{config.postgres_connection_string}[/bold][/blue]")
+    print("Type [blue]y[/blue] to continue:")
+    
+    if input("[y/N]: ").strip() != "y":
+        print("\nCancelled.")
+        return 1
+    
+    logging.config.dictConfig(config._logging_config)
+    
+    with importlib.resources.path("idv_server", "alembic.ini") as alembic_ini:
+        alembic_cfg = AlembicConfig(alembic_ini)
+        alembic_cfg.set_main_option("sqlalchemy.url", config.postgres_connection_string.encoded_string())
+        
+        alembic_command.upgrade(alembic_cfg, "head")
+        
+    print("\n[green]Migrated successfully![/green]")

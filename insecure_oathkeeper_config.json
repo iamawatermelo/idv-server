@@ -1,0 +1,30 @@
+{
+  "serve": {
+    "api": {
+      "port": 3333
+    }
+  },
+  "access_rules": {
+    "repositories": [
+      "file://./insecure_oathkeeper.json"
+    ]
+  },
+  "authenticators": {
+    "anonymous": {
+      "enabled": true
+    }
+  },
+  "authorizers": {
+    "allow": {
+      "enabled": true
+    }
+  },
+  "mutators": {
+    "header": {
+      "enabled": true,
+      "config": {
+        "headers": {}
+      }
+    }
+  }
+}

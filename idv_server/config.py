@@ -1,6 +1,20 @@
 from typing import Any
-from pydantic import Field, PostgresDsn, computed_field
+from pydantic import BaseModel, Field, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
+import strawberry
+import hypercorn
+import sqlalchemy
+import sqlmodel
+import anyio
+import click
+import graphql
+
+
+class Auth(BaseModel):
+    pdp_endpoint: str
+    forwarded_headers: list[str] = ["authorization"]
+    subject_header: str = "x-authenticated-subject"
+    root_subjects: list[str] = [""]
 
 
 class Config(BaseSettings):
@@ -9,14 +23,16 @@ class Config(BaseSettings):
         env_prefix="IDV_",
         toml_file="config.toml"
     )
-    
+
     hostname: str = "0.0.0.0"
     port: int = Field(default=8080, alias="PORT")
-    
+
     postgres_connection_string: PostgresDsn
     log_level: str = "WARNING"
     logging_config: dict[str, Any] | None = None
-    
+
+    auth: Auth | None = None
+
     @computed_field
     @property
     def _logging_config(self) -> dict[str, Any]:
@@ -27,17 +43,18 @@ class Config(BaseSettings):
                 "rich_console": {
                     "class": "rich.logging.RichHandler",
                     "level": self.log_level,
-                    
+
                     "rich_tracebacks": True,
                     "show_path": True,
                     "markup": True,
                     "tracebacks_suppress": [
-                        "strawberry",
-                        "hypercorn",
-                        "sqlalchemy",
-                        "sqlmodel",
-                        "anyio",
-                        "click"
+                        strawberry,
+                        hypercorn,
+                        sqlalchemy,
+                        sqlmodel,
+                        anyio,
+                        click,
+                        graphql
                     ]
                 }
             },

@@ -59,3 +59,69 @@ sequenceDiagram
         IDV ->> App: User verified with status ...
     end
 ```
+
+## Authentication
+
+Authentication is wide and varied, and so it is left up to implementors
+of IDV. idv-server is designed to delegate authentication and
+authorization to a third-party Policy Decision Point (PDP).
+
+### API
+
+idv-server will forward the headers in `auth_headers` and send a request
+to the `auth_pdp_endpoint` to determine whether access should be
+allowed.
+
+```
+GET /createTicket HTTP/1.1
+Authorization: eyXXXXXX
+.. other forwarded headers ..
+```
+
+idv-server will accept the request if a 200 or 204 is returned, and
+reject otherwise.
+
+idv-server will accept an `X-Authenticated-Subject` header by default,
+but you can also change the header that contains the authenticated
+subject with `subject_header` under `[auth]`. Unauthenticated responses
+should not contain an `X-Authenticated-Subject` header.
+
+The `X-Authenticated-Subject` header should match the issuer ID or
+verifier ID.
+
+See [insecure_oathkeeper.json](insecure_oathkeeper.json) for an example
+Ory Oathkeeper config that allows all requests by using a root subject.
+Root subjects may be added in `root_subjects` under `[auth]`.
+
+### Routes
+
+#### Queries
+
+- `ticket(id: $id)` -> `GET /ticket/$id`  
+  **Note:** Should be public.
+
+- `ticket(id: $id) { verificationInformation }` -> `GET /ticket/$id/verificationInformation`  
+  **Note:** Should only be available to the issuer.
+
+#### Mutations
+
+- `createTicket(issuer: $id)` -> `POST /issuer/$id/createTicket`  
+  **Note:** Should only be available to issuers.
+  
+- `startBasicVerification(ticket: $id)` -> `POST /ticket/$id/startBasicVerification`  
+  **Note:** Should be public. idv-server will also verify the
+  Authorization header to ensure that it matches the token associated
+  with the ticket.
+
+- `submitBasicInformation(ticket: $id)` -> `POST /ticket/$id/submitBasicInformation`  
+  **Note:** Should be public. idv-server will also verify the
+  Authorization header to ensure that it matches the token associated
+  with the ticket.
+
+- `updateVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/updateVerificationTicket`  
+  **Note:** Should only be available to the verifier that the ticket
+  was issued to.
+
+- `finalizeVerificationTicket(ticket: $id)` -> `POST /verificationTicket/$id/finalizeVerificationTicket`  
+  **Note:** Should only be available to the verifier that the ticket
+  was issued to.
