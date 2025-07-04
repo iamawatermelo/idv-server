@@ -21,7 +21,7 @@ _current_env: Env | None = None
 
 
 class Env:
-    engine: AsyncEngine
+    db: AsyncEngine
     http: aiohttp.ClientSession
     
     @contextlib.asynccontextmanager
@@ -31,10 +31,10 @@ class Env:
         st = time()
         logger.debug("Entering new environment context")
         
-        self.engine = await connect()
+        self.db = await connect()
         self.http = aiohttp.ClientSession()
         
-        async with self.engine.begin() as conn:
+        async with self.db.begin() as conn:
             await conn.exec_driver_sql("SELECT 'hello, world!'")
         
         _current_env = self
@@ -47,7 +47,7 @@ class Env:
         
         _current_env = None
         
-        await self.engine.dispose(close=True)
+        await self.db.dispose(close=True)
         await self.http.close()
     
     @classmethod

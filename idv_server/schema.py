@@ -1,5 +1,8 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import time
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NewType, TypeAlias
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 import strawberry
 import strawberry.asgi
@@ -16,6 +19,8 @@ from idv_server.enums import (
     TicketStage,
     UserVerdictType,
 )
+from idv_server.env import Env
+from idv_server.models import ApplicationModel, TicketModel
 
 ID = strawberry.scalar(
     NewType("ID", UUID),
@@ -85,6 +90,7 @@ class TicketVerificationInformation:
 
 @strawberry.type
 class Ticket:
+    db_id: strawberry.Private[UUID]
     id: ID
     
     issuer_id: strawberry.Private[UUID]
@@ -200,8 +206,36 @@ class Mutation:
             headers=headers(info),
             authorized_subject=str(issuer) if issuer else None
         )
-
-        pass
+        
+        env = Env.ctx()
+        
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            issuer_model = (await session.execute(
+                select(ApplicationModel)
+                .where(ApplicationModel.uuid == issuer)
+            )).scalars().one_or_none
+            
+            if not issuer_model:
+                raise ValueError("Issuer not found")
+        
+            now = datetime.now()
+            
+            ticket = TicketModel(
+                issuer_id=issuer,
+                issued_at=now,
+                claim_expires_at=now + timedelta(seconds=issuer_model.default_claim_expiration_time),
+                verification_expires_at=now + timedelta(seconds=issuer_model.default_verification_expiration_time),
+                ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time)
+            )
+            
+            session.add(ticket)
+            await session.commit()
+            await session.refresh(ticket)
+            
+            return Ticket(
+                
+            )
+        
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def start_basic_verification(
