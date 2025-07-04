@@ -1,6 +1,11 @@
 from typing import Any
 from pydantic import BaseModel, Field, PostgresDsn, computed_field
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
 import strawberry
 import hypercorn
 import sqlalchemy
@@ -19,9 +24,7 @@ class Auth(BaseModel):
 
 class Config(BaseSettings):
     model_config = SettingsConfigDict(
-        env_nested_delimiter="__",
-        env_prefix="IDV_",
-        toml_file="config.toml"
+        env_nested_delimiter="__", env_prefix="IDV_", toml_file="config.toml"
     )
 
     hostname: str = "0.0.0.0"
@@ -43,7 +46,6 @@ class Config(BaseSettings):
                 "rich_console": {
                     "class": "rich.logging.RichHandler",
                     "level": self.log_level,
-
                     "rich_tracebacks": True,
                     "show_path": True,
                     "markup": True,
@@ -54,21 +56,18 @@ class Config(BaseSettings):
                         sqlmodel,
                         anyio,
                         click,
-                        graphql
-                    ]
+                        graphql,
+                    ],
                 }
             },
             "loggers": {
                 "hypercorn": {
                     "level": "INFO",
                     "propagate": False,
-                    "handlers": ["rich_console"]
+                    "handlers": ["rich_console"],
                 },
             },
-            "root": {
-                "level": "DEBUG",
-                "handlers": ["rich_console"]
-            }
+            "root": {"level": "DEBUG", "handlers": ["rich_console"]},
         }
 
     @classmethod

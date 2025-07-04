@@ -1,7 +1,9 @@
+from enum import unique
 from datetime import datetime, date
 from typing import Any
 from uuid import UUID, uuid4
 
+from graphql.language.ast import Token
 from sqlalchemy import Column, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import ARRAY, Field, Relationship, SQLModel, String
@@ -19,7 +21,7 @@ class IssuerModel(SQLModel, table=True):
     __tablename__ = "issuer"
 
     id: int | None = Field(default=None, primary_key=True)
-    uuid: UUID = Field(default=uuid4)
+    uuid: UUID = Field(default_factory=uuid4, unique=True, index=True)
 
     name: str
 
@@ -45,7 +47,7 @@ class BasicInformationModel(SQLModel, table=True):
     date_of_birth: date
     country_of_primary_residence: str
 
-    ticket_id: int = Field(foreign_key="ticket.id", unique=True)
+    ticket_id: int = Field(foreign_key="ticket.id", unique=True, index=True)
     ticket: "TicketModel" = Relationship(back_populates="basic_information")
 
 
@@ -65,7 +67,7 @@ class VerificationInformationModel(SQLModel, table=True):
     last_name: str | None
     date_of_birth: date | None
 
-    ticket_id: int = Field(foreign_key="ticket.id", unique=True)
+    ticket_id: int = Field(foreign_key="ticket.id", unique=True, index=True)
     ticket: "TicketModel" = Relationship(back_populates="verification_information")
 
 
@@ -79,17 +81,27 @@ class MetadataModel(SQLModel, table=True):
     message: str
     details: dict[str, Any] = Field(sa_column=Column(JSONB))
 
-    ticket_id: int = Field(foreign_key="ticket.id")
+    ticket_id: int = Field(foreign_key="ticket.id", index=True)
     ticket: "TicketModel" = Relationship(back_populates="metadata_entries")
+
+
+class TokenModel(SQLModel, table=True):
+    __tablename__ = "token"
+
+    id: int | None = Field(default=None, primary_key=True)
+    hashed_token: String = Field(unique=True, index=True)
+
+    ticket_id: int = Field(foreign_key="ticket.id", index=True)
+    ticket: "TicketModel" = Relationship(back_populates="tokens")
 
 
 class TicketModel(SQLModel, table=True):
     __tablename__ = "ticket"
 
     id: int | None = Field(default=None, primary_key=True)
-    uuid: UUID
+    uuid: UUID = Field(default_factory=uuid4, unique=True, index=True)
 
-    issuer_id: int = Field(foreign_key="issuer.id")
+    issuer_id: int = Field(foreign_key="issuer.id", index=True)
     issuer: IssuerModel = Relationship(back_populates="tickets")
 
     issued_at: datetime
@@ -101,11 +113,21 @@ class TicketModel(SQLModel, table=True):
     user_verdict: str | None = None
     user_verdict_type: UserVerdictType | None = None
 
-    acceptable_authenticity: list[AuthenticityType] = Field(sa_column=Column(ARRAY(Enum(AuthenticityType))))
-    acceptable_ownership: list[OwnershipType] = Field(sa_column=Column(ARRAY(Enum(OwnershipType))))
+    acceptable_authenticity: list[AuthenticityType] = Field(
+        sa_column=Column(ARRAY(Enum(AuthenticityType)))
+    )
+    acceptable_ownership: list[OwnershipType] = Field(
+        sa_column=Column(ARRAY(Enum(OwnershipType)))
+    )
 
-    basic_information: BasicInformationModel | None = Relationship(back_populates="ticket")
+    basic_information: BasicInformationModel | None = Relationship(
+        back_populates="ticket"
+    )
 
-    verification_information: VerificationInformationModel | None = Relationship(back_populates="ticket")
+    verification_information: VerificationInformationModel | None = Relationship(
+        back_populates="ticket"
+    )
 
     metadata_entries: list[MetadataModel] = Relationship(back_populates="ticket")
+
+    tokens: list[TokenModel] = Relationship(back_populates="ticket")

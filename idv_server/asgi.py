@@ -27,21 +27,16 @@ async def lifespan(app: fastapi.FastAPI):
         )
     elif config.auth.root_subjects != []:
         logger.warning("[yellow]Root subjects are configured for idv-server.[/yellow]")
-    
-    
+
     async with Env().enter():
         yield
 
 
 app = fastapi.FastAPI(
     lifespan=lifespan,
-    
     # Doesn't really matter, because there aren't any routes
     openapi_url=None,
-    docs_url=None
+    docs_url=None,
 )
 
-app.mount(
-    path="/graphql",
-    app=graphql
-)
+app.mount(path="/graphql", app=graphql)

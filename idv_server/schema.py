@@ -1,7 +1,8 @@
 from datetime import date, datetime, timedelta
 import time
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NewType, Self, TypeAlias
-from sqlalchemy import select
+from graphql import GraphQLError
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 import strawberry
@@ -9,6 +10,7 @@ import strawberry.asgi
 from uuid import UUID, uuid4
 from strawberry.field_extensions import InputMutationExtension
 from strawberry.scalars import JSON
+import hashlib
 
 from idv_server.config import config
 from idv_server.auth import Unauthorized, authorize
@@ -20,7 +22,7 @@ from idv_server.enums import (
     UserVerdictType,
 )
 from idv_server.env import Env
-from idv_server.models import IssuerModel, TicketModel
+from idv_server.models import IssuerModel, TicketModel, TokenModel, VerificationInformationModel
 
 ID = strawberry.scalar(
     NewType("ID", UUID),
@@ -100,15 +102,66 @@ class UserData:
 
 @strawberry.type
 class TicketVerificationInformation:
-    verifier: str | None
-
     verdict: TicketVerificationVerdict
-    verdict_reason: str | None
-    verdict_human_reason: str | None
 
-    user_data: UserData | None
+    verifier: str | None = None
 
-    metadata: list[MetadataEntry]
+    verdict_reason: str | None = None
+    verdict_human_reason: str | None = None
+
+    user_data: UserData | None = None
+
+    metadata: list[MetadataEntry] = []
+
+    @classmethod
+    def from_orm(
+        cls, verification_information_model: VerificationInformationModel
+    ) -> Self:
+        """
+        Convert a VerificationInformationModel to a TicketVerificationInformation GraphQL type
+        """
+
+        # Create UserData if we have the required fields
+        user_data = None
+        if (
+            verification_information_model.authenticity is not None
+            and verification_information_model.ownership is not None
+            and verification_information_model.first_name is not None
+            and verification_information_model.last_name is not None
+            and verification_information_model.date_of_birth is not None
+        ):
+            user_data = UserData(
+                authenticity=verification_information_model.authenticity,
+                ownership=verification_information_model.ownership,
+                first_name=verification_information_model.first_name,
+                last_name=verification_information_model.last_name,
+                date_of_birth=verification_information_model.date_of_birth,
+            )
+
+        # Convert metadata entries
+        metadata = []
+        if (
+            verification_information_model.ticket
+            and verification_information_model.ticket.metadata_entries
+        ):
+            metadata = [
+                MetadataEntry(
+                    timestamp=entry.timestamp,
+                    source=entry.source,
+                    message=entry.message,
+                    details=entry.details,
+                )
+                for entry in verification_information_model.ticket.metadata_entries
+            ]
+
+        return cls(
+            verdict=verification_information_model.verdict,
+            verifier=verification_information_model.verifier,
+            verdict_reason=verification_information_model.verdict_reason,
+            verdict_human_reason=verification_information_model.verdict_human_reason,
+            user_data=user_data,
+            metadata=metadata,
+        )
 
 
 @strawberry.type
@@ -133,12 +186,13 @@ class Ticket:
     verdict: str | None
     verdict_type: UserVerdictType | None
 
+    verification_information_id: strawberry.Private[int]
+
     # Only available to the issuer, not the user
     @strawberry.field
     async def verification_information(
-        self,
-        info: strawberry.Info
-    ) -> TicketVerificationInformation:
+        self, info: strawberry.Info
+    ) -> TicketVerificationInformation | None:
         """
         Fetch verification information from this ticket. Available to
         issuers only.
@@ -148,15 +202,33 @@ class Ticket:
             "READ",
             f"/ticket/{id}/verificationInformation",
             headers=headers(info),
-            authorized_subject=None
+            authorized_subject=None,
         )
 
-        pass
-    
+        env = Env.ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            verification_information_model = (
+                (
+                    await session.execute(
+                        select(VerificationInformationModel).where(
+                            VerificationInformationModel.ticket_id == self.db_id
+                        )
+                    )
+                )
+                .scalars()
+                .one_or_none()
+            )
+
+            if verification_information_model is None:
+                return None
+
+            return TicketVerificationInformation.from_orm(
+                verification_information_model
+            )
+
     @strawberry.field
-    async def issuer(
-        self
-    ) -> Issuer:
+    async def issuer(self) -> Issuer:
         env = Env.ctx()
 
         async with env.db.begin() as tx, AsyncSession(tx) as session:
@@ -178,7 +250,7 @@ class Ticket:
             ticket_expires_at=ticket_model.ticket_expires_at,
             stage=ticket_model.stage,
             verdict=ticket_model.user_verdict,
-            verdict_type=ticket_model.user_verdict_type
+            verdict_type=ticket_model.user_verdict_type,
         )
 
 
@@ -203,13 +275,50 @@ class Query:
     @strawberry.field
     async def ticket(self, info: strawberry.Info, id: ID) -> Ticket:
         await authorize(
-            "READ",
-            f"/ticket/{id}",
-            headers=headers(info),
-            authorized_subject=None
+            "READ", f"/ticket/{id}", headers=headers(info), authorized_subject=None
         )
 
-        pass
+        env = Env().ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            ticket_model = (
+                (
+                    await session.execute(
+                        select(TicketModel).where(TicketModel.uuid == id)
+                    )
+                )
+                .scalars()
+                .one_or_none()
+            )
+
+            if not ticket_model:
+                raise ValueError("Issuer not found")
+
+            return Ticket.from_orm(ticket_model)
+
+    @strawberry.field
+    async def issuer(self, info: strawberry.Info, id: ID) -> Issuer:
+        await authorize(
+            "READ", f"/issuer/{id}", headers=headers(info), authorized_subject=None
+        )
+
+        env = Env().ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            issuer_model = (
+                (
+                    await session.execute(
+                        select(IssuerModel).where(IssuerModel.uuid == id)
+                    )
+                )
+                .scalars()
+                .one_or_none()
+            )
+
+            if not issuer_model:
+                raise ValueError("Issuer not found")
+
+            return Issuer.from_orm(issuer_model)
 
 
 @strawberry.input
@@ -251,21 +360,16 @@ class Mutation:
         self,
         info: strawberry.Info,
         name: str,
-
         hct_root_tone: int | None = None,
         bg_url: str | None = None,
         icon_url: str | None = None,
         favicon_url: str | None = None,
-
         default_claim_expiration_time: int = 3600,
         default_verification_expiration_time: int = 86400,
-        default_ticket_expiration_time: int = 604800
+        default_ticket_expiration_time: int = 604800,
     ) -> Issuer:
         await authorize(
-            "MODIFY",
-            "/createIssuer",
-            headers=headers(info),
-            authorized_subject=None
+            "MODIFY", "/createIssuer", headers=headers(info), authorized_subject=None
         )
 
         env = Env.ctx()
@@ -289,28 +393,29 @@ class Mutation:
 
             return Issuer.from_orm(issuer)
 
-
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def create_ticket(
-        self,
-        info: strawberry.Info,
-        issuer: ID,
-        ticket_options: TicketOptionsInput
+        self, info: strawberry.Info, issuer: ID, ticket_options: TicketOptionsInput
     ) -> Ticket:
         await authorize(
             "MODIFY",
             f"/issuer/{issuer}/createTicket",
             headers=headers(info),
-            authorized_subject=str(issuer) if issuer else None
+            authorized_subject=str(issuer) if issuer else None,
         )
 
         env = Env.ctx()
 
         async with env.db.begin() as tx, AsyncSession(tx) as session:
-            issuer_model = (await session.execute(
-                select(IssuerModel)
-                .where(IssuerModel.uuid == issuer)
-            )).scalars().one_or_none()
+            issuer_model = (
+                (
+                    await session.execute(
+                        select(IssuerModel).where(IssuerModel.uuid == issuer)
+                    )
+                )
+                .scalars()
+                .one_or_none()
+            )
 
             if not issuer_model:
                 raise ValueError("Issuer not found")
@@ -321,11 +426,18 @@ class Mutation:
                 uuid=uuid4(),
                 issuer_id=issuer_model.id,
                 issued_at=now,
-                claim_expires_at=now + timedelta(seconds=issuer_model.default_claim_expiration_time),
-                verification_expires_at=now + timedelta(seconds=issuer_model.default_verification_expiration_time),
-                ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time),
-                acceptable_authenticity=[x.value for x in ticket_options.acceptable_authenticity],
-                acceptable_ownership=[x.value for x in ticket_options.acceptable_ownership]
+                claim_expires_at=now
+                + timedelta(seconds=issuer_model.default_claim_expiration_time),
+                verification_expires_at=now
+                + timedelta(seconds=issuer_model.default_verification_expiration_time),
+                ticket_expires_at=now
+                + timedelta(seconds=issuer_model.default_ticket_expiration_time),
+                acceptable_authenticity=[
+                    x.value for x in ticket_options.acceptable_authenticity
+                ],
+                acceptable_ownership=[
+                    x.value for x in ticket_options.acceptable_ownership
+                ],
             )
 
             session.add(ticket)
@@ -334,35 +446,68 @@ class Mutation:
 
             return Ticket.from_orm(ticket)
 
-
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def start_basic_verification(
-        self,
-        info: strawberry.Info,
-        ticket: ID
+        self, info: strawberry.Info, ticket: ID
     ) -> StartBasicVerificationResult:
         await authorize(
             "MODIFY",
             f"/ticket/{ticket}/startBasicVerification",
             headers=headers(info),
-            authorized_subject=None
+            authorized_subject=None,
         )
 
-        pass
+        env = Env.ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            ticket_model = (
+                (
+                    await session.execute(
+                        update(TicketModel)
+                            .where(TicketModel.uuid == ticket)
+                            .where(TicketModel.stage == TicketStage.NOT_CLAIMED)
+                            .where(TicketModel.claim_expires_at > datetime.now())
+                            .values(stage=TicketStage.AUTH_ISSUED)
+                            .returning(TicketModel)
+                    )
+                ).scalar_one_or_none()
+            )
+            
+            if ticket_model is None:
+                raise GraphQLError("invalid state change: ticket doesn't exist, was already claimed or the claim period has expired")
+            
+            ticket_model.stage = TicketStage.AUTH_ISSUED
+            
+            token = uuid4()
+            hashed_token = hashlib.sha256(ticket_model.uuid.bytes + token.bytes).digest()
+            
+            session.add(TokenModel(
+                hashed_token=hashed_token,
+                ticket_id=ticket_model.id
+            ))
+            
+            await session.commit()
+            await session.refresh(ticket_model)
+            
+            # TODO: Implement session resumption
+            
+            return StartBasicVerificationResult(
+                authentication_token=token.hex,
+                ticket=Ticket.from_orm(ticket_model)
+            )
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def submit_basic_information(
-        self,
-        info: strawberry.Info,
-        ticket: ID,
-        basic_information: BasicInformation
+        self, info: strawberry.Info, ticket: ID, basic_information: BasicInformation
     ) -> StartVerificationResult:
         await authorize(
             "MODIFY",
             f"/ticket/{ticket}/submitBasicInformation",
             headers=headers(info),
-            authorized_subject=None
+            authorized_subject=None,
         )
+        
+        info.
 
         pass
 
@@ -378,7 +523,7 @@ class Mutation:
             "MODIFY",
             f"/verificationTicket/{verification_ticket}/updateVerificationTicket",
             headers=headers(info),
-            authorized_subject=None # TODO
+            authorized_subject=None,  # TODO
         )
 
         pass
@@ -396,7 +541,7 @@ class Mutation:
             "MODIFY",
             f"/verificationTicket/{verification_ticket}/finalizeVerificationTicket",
             headers=headers(info),
-            authorized_subject=None # TODO
+            authorized_subject=None,  # TODO
         )
 
         pass
