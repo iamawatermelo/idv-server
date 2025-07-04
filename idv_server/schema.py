@@ -479,7 +479,7 @@ class Mutation:
             ticket_model.stage = TicketStage.AUTH_ISSUED
             
             token = uuid4()
-            hashed_token = hashlib.sha256(ticket_model.uuid.bytes + token.bytes).digest()
+            hashed_token = hashlib.sha256(ticket_model.uuid.bytes + token.bytes).hexdigest()
             
             session.add(TokenModel(
                 hashed_token=hashed_token,
@@ -507,8 +507,38 @@ class Mutation:
             authorized_subject=None,
         )
         
-        info.
+        request: Request = info.context["request"]
+        auth_header = request.headers.get("Authorization")
+        auth_header = auth_header.replace("Bearer ", "")
+        
+        token = UUID(hex=auth_header.strip())
+        
+        hashed_token = hashlib.sha256(
+            ticket.bytes + token.bytes
+        ).hexdigest()
+        
+        env = Env.ctx()
 
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            ticket_model = (
+                (
+                    await session.execute(
+                        update(TicketModel)
+                            .where(TicketModel.verification_expires_at > datetime.now())
+                            .where(TicketModel.stage == TicketStage.AUTH_ISSUED)
+                            .where(TicketModel.id.in_(
+                                select(TokenModel.ticket_id)
+                                    .where(TokenModel.hashed_token == hashed_token)
+                            ))
+                            .values(stage=TicketStage.BASIC_INFORMATION_SUBMITTED)
+                            .returning(TicketModel)
+                    )
+                ).scalar_one_or_none()
+            )
+            
+            if ticket_model is None or ticket_model.uuid != ticket:
+                raise GraphQLError("invalid state change: unauthenticated/unauthorized, ticket doesn't exist or ticket expired")
+        
         pass
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
