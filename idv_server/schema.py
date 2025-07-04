@@ -117,7 +117,6 @@ class Ticket:
     id: ID
 
     issuer_id: strawberry.Private[UUID]
-    issuer: Issuer
 
     issued_at: datetime
 
@@ -153,6 +152,15 @@ class Ticket:
         )
 
         pass
+    
+    @strawberry.field
+    async def issuer(
+        self
+    ) -> Issuer:
+        env = Env.ctx()
+
+        async with env.db.begin() as tx, AsyncSession(tx) as session:
+            return Issuer.from_orm(session.get(IssuerModel, self.issuer_id))
 
     @classmethod
     def from_orm(cls, ticket_model: TicketModel) -> Self:
@@ -164,7 +172,6 @@ class Ticket:
             db_id=ticket_model.id,
             id=ticket_model.uuid,
             issuer_id=ticket_model.issuer_id,
-            issuer=Issuer.from_orm(ticket_model.issuer),
             issued_at=ticket_model.issued_at,
             claim_expires_at=ticket_model.claim_expires_at,
             verification_expires_at=ticket_model.verification_expires_at,
@@ -311,13 +318,14 @@ class Mutation:
             now = datetime.now()
 
             ticket = TicketModel(
+                uuid=uuid4(),
                 issuer_id=issuer_model.id,
                 issued_at=now,
                 claim_expires_at=now + timedelta(seconds=issuer_model.default_claim_expiration_time),
                 verification_expires_at=now + timedelta(seconds=issuer_model.default_verification_expiration_time),
                 ticket_expires_at=now + timedelta(seconds=issuer_model.default_ticket_expiration_time),
                 acceptable_authenticity=[x.value for x in ticket_options.acceptable_authenticity],
-                acceptable_ownership=ticket_options.acceptable_ownership
+                acceptable_ownership=[x.value for x in ticket_options.acceptable_ownership]
             )
 
             session.add(ticket)

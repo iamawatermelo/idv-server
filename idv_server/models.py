@@ -2,7 +2,7 @@ from datetime import datetime, date
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import ARRAY, Field, Relationship, SQLModel, String
 
@@ -101,8 +101,8 @@ class TicketModel(SQLModel, table=True):
     user_verdict: str | None = None
     user_verdict_type: UserVerdictType | None = None
 
-    acceptable_authenticity: list[AuthenticityType] = Field(sa_column=Column(ARRAY(String)))
-    acceptable_ownership: list[OwnershipType] = Field(sa_column=Column(ARRAY(String)))
+    acceptable_authenticity: list[AuthenticityType] = Field(sa_column=Column(ARRAY(Enum(AuthenticityType))))
+    acceptable_ownership: list[OwnershipType] = Field(sa_column=Column(ARRAY(Enum(OwnershipType))))
 
     basic_information: BasicInformationModel | None = Relationship(back_populates="ticket")
 
