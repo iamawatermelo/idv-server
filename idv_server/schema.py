@@ -22,7 +22,7 @@ from idv_server.enums import (
     UserVerdictType,
 )
 from idv_server.env import Env
-from idv_server.models import IssuerModel, TicketModel, TokenModel, VerificationInformationModel
+from idv_server.models import BasicInformationModel, IssuerModel, TicketModel, TokenModel, VerificationInformationModel
 
 ID = strawberry.scalar(
     NewType("ID", UUID),
@@ -48,6 +48,25 @@ def headers(info: strawberry.Info):
         if k in config.auth.forwarded_headers
     }
 
+def hash_token(info: strawberry.Info, ticket: ID):
+    request: Request = info.context["request"]
+    auth_header = request.headers.get("Authorization")
+    
+    if auth_header is None:
+        raise Unauthorized()
+    
+    auth_header = auth_header.replace("Bearer ", "")
+    
+    try:
+        token = UUID(hex=auth_header.strip())
+    except ValueError:
+        raise Unauthorized()
+    
+    hashed_token = hashlib.sha256(
+        ticket.bytes + token.bytes
+    ).hexdigest()
+    
+    return hashed_token
 
 @strawberry.type
 class Issuer:
@@ -499,7 +518,7 @@ class Mutation:
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def submit_basic_information(
         self, info: strawberry.Info, ticket: ID, basic_information: BasicInformation
-    ) -> StartVerificationResult:
+    ) -> SubmitBasicInformationResult:
         await authorize(
             "MODIFY",
             f"/ticket/{ticket}/submitBasicInformation",
@@ -507,15 +526,7 @@ class Mutation:
             authorized_subject=None,
         )
         
-        request: Request = info.context["request"]
-        auth_header = request.headers.get("Authorization")
-        auth_header = auth_header.replace("Bearer ", "")
-        
-        token = UUID(hex=auth_header.strip())
-        
-        hashed_token = hashlib.sha256(
-            ticket.bytes + token.bytes
-        ).hexdigest()
+        hashed_token = hash_token(info, ticket)
         
         env = Env.ctx()
 
@@ -539,7 +550,17 @@ class Mutation:
             if ticket_model is None or ticket_model.uuid != ticket:
                 raise GraphQLError("invalid state change: unauthenticated/unauthorized, ticket doesn't exist or ticket expired")
         
-        pass
+            session.add(BasicInformationModel(
+                first_name=basic_information.first_name,
+                last_name=basic_information.last_name,
+                date_of_birth=basic_information.date_of_birth,
+                country_of_primary_residence=basic_information.country_of_primary_residence,
+                ticket_id=ticket_model.id
+            ))
+            
+            await session.commit()
+            
+            #return StartBsas.
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def update_verification_ticket(
