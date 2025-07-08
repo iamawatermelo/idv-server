@@ -518,7 +518,7 @@ class Mutation:
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def submit_basic_information(
         self, info: strawberry.Info, ticket: ID, basic_information: BasicInformation
-    ) -> SubmitBasicInformationResult:
+    ) -> Ticket:
         await authorize(
             "MODIFY",
             f"/ticket/{ticket}/submitBasicInformation",
@@ -559,8 +559,9 @@ class Mutation:
             ))
             
             await session.commit()
+            await session.refresh(ticket_model)
             
-            #return StartBsas.
+            return Ticket.from_orm(ticket_model)
 
     @strawberry.mutation(extensions=[InputMutationExtension()])
     async def update_verification_ticket(
